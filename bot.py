@@ -100,7 +100,7 @@ def main():
         except FileNotFoundError:
             logging.warning(f"popularity data could not be found at {popularity_filename}; counting from scratch.")
     else:
-        logging.info("POPULARITY_DATA not set, popularity will not be saved for this session.")
+        logging.warning("POPULARITY_DATA not set, popularity will not be saved for this session.")
 
     u = Updater(token=api_token, use_context=True)
 
