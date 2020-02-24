@@ -22,7 +22,7 @@ from transforms import transforms as tfs
 # configure from environment variables
 api_token = os.getenv("TELEGRAM_API_TOKEN")
 ranking_update_frequency = int(os.getenv("RANKING_UPDATE_FREQUENCY", "0"))
-popularity_filename = os.getenv("POPULARITY_DATA")
+popularity_filename = os.path.join(os.getenv("POPULARITY_DATA"), "popularity.json")
 
 # initialize globals
 # tracks number of uses of each transform

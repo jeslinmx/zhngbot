@@ -9,10 +9,12 @@ RUN apk add --no-cache --virtual .build_deps \
 && pip install \
     'python-telegram-bot>=12.4' \
 && apk del .build_deps \
-&& mkdir -p /bot
+&& mkdir -p /bot/data
 
 COPY ./* /bot/
 
 WORKDIR /bot
+
+ENV POPULARITY_DATA=/bot/data
 
 CMD ["/usr/local/bin/python", "/bot/bot.py"]
