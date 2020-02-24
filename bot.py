@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from collections import defaultdict
 
 from telegram import (
     InlineQueryResultArticle,
@@ -16,7 +17,7 @@ from telegram.ext import (
 )
 from telegram.ext.dispatcher import run_async
 
-from transforms import transforms
+from transforms import transforms as tfs
 
 # configure from environment variables
 api_token = os.getenv("TELEGRAM_API_TOKEN")
@@ -24,8 +25,13 @@ ranking_update_frequency = int(os.getenv("RANKING_UPDATE_FREQUENCY", "0"))
 popularity_filename = os.getenv("POPULARITY_DATA")
 
 # initialize globals
-popularity = {transform_name: 0 for transform_name in transforms}
-ranking = list(transforms.keys())
+# tracks number of uses of each transform
+popularity = {
+    "global": {tf_name: 0 for tf_name in tfs}
+}
+# stores the order in which transforms are presented, periodically
+# updated to favour the most commonly used transforms
+ranking = defaultdict(lambda: list(tfs.keys()))
 
 @run_async
 def process_query(upd: Update, ctx: CallbackContext):
@@ -33,32 +39,41 @@ def process_query(upd: Update, ctx: CallbackContext):
         upd.inline_query.answer(
             results=[
                 InlineQueryResultArticle(
-                    id=name,
-                    title=transforms[name](upd.inline_query.query),
+                    id=tf_name,
+                    title=tfs[tf_name](upd.inline_query.query),
                     input_message_content=InputTextMessageContent(
-                        message_text=transforms[name](upd.inline_query.query),
+                        message_text=tfs[tf_name](upd.inline_query.query),
                     ),
-                    description=f"{name}",
+                    description=f"{tf_name}",
                 )
-                for name in ranking
+                for tf_name in ranking.get(str(upd.effective_user.id), ranking["global"])
             ],
             cache_time=0,
         )
 
 def count_hits(upd: Update, ctx: CallbackContext):
-    popularity[upd.chosen_inline_result.result_id] += 1
-    # if RANKING_UPDATE_FREQUENCY is default (0), update every time the API
+    if str(upd.effective_user.id) not in popularity:
+        popularity[str(upd.effective_user.id)] = {tf_name: 0 for tf_name in tfs}
+    popularity["global"][upd.chosen_inline_result.result_id] += 1
+    popularity[str(upd.effective_user.id)][upd.chosen_inline_result.result_id] += 1
+
+    # if RANKING_UPDATE_FREQUENCY is 0, update rankings every time the API
     # sends inline query feedback
     if not ranking_update_frequency:
         update_ranking(ctx)
 
 @run_async
 def update_ranking(ctx: CallbackContext):
-    # revise the order in which the transforms are presented to latest numbers
-    ranking.sort(
-        key=lambda key: popularity[key],
-        reverse=True,
-    )
+    # sort all rankings based on each user's use-count, falling back to global
+    # use-count as a tiebreaker
+    for user_id in popularity:
+        ranking[user_id].sort(
+            key=lambda tf_name: (
+                popularity[user_id][tf_name],
+                popularity["global"][tf_name]
+            ),
+            reverse=True,
+        )
     # write current popularity numbers to disk
     if popularity_filename:
         with open(popularity_filename, "w") as popularity_data:
@@ -82,7 +97,6 @@ def main():
             with open(popularity_filename, "r") as popularity_data:
                 popularity = json.load(popularity_data)
             logging.info(f"popularity numbers loaded from {popularity_filename}.")
-            update_ranking(None)
         except FileNotFoundError:
             logging.warning(f"popularity data could not be found at {popularity_filename}; counting from scratch.")
     else:
@@ -102,6 +116,8 @@ def main():
     j = u.job_queue
     if ranking_update_frequency:
         j.run_repeating(update_ranking, ranking_update_frequency)
+    else:
+        update_ranking(None) # guarantees update_ranking runs on startup
 
     u.start_polling()
     u.idle()
