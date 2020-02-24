@@ -14,6 +14,7 @@ from telegram.ext import (
     InlineQueryHandler,
     Updater,
 )
+from telegram.ext.dispatcher import run_async
 
 from transforms import transforms
 
@@ -26,6 +27,7 @@ popularity_filename = os.getenv("POPULARITY_DATA")
 popularity = {transform_name: 0 for transform_name in transforms}
 ranking = list(transforms.keys())
 
+@run_async
 def process_query(upd: Update, ctx: CallbackContext):
     if upd.inline_query.query:
         upd.inline_query.answer(
@@ -50,6 +52,7 @@ def count_hits(upd: Update, ctx: CallbackContext):
     if not ranking_update_frequency:
         update_ranking(ctx)
 
+@run_async
 def update_ranking(ctx: CallbackContext):
     # revise the order in which the transforms are presented to latest numbers
     ranking.sort(
@@ -62,6 +65,7 @@ def update_ranking(ctx: CallbackContext):
             json.dump(popularity, popularity_data)
         logging.info(f"popularity numbers written to {popularity_filename} at {time.asctime()}")
 
+@run_async
 def handle_error(upd: Update, ctx: CallbackContext):
     raise
 
