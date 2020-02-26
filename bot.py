@@ -22,7 +22,9 @@ from transforms import transforms as tfs
 # configure from environment variables
 api_token = os.getenv("TELEGRAM_API_TOKEN")
 ranking_update_frequency = int(os.getenv("RANKING_UPDATE_FREQUENCY", "0"))
-popularity_filename = os.path.join(os.getenv("POPULARITY_DATA"), "popularity.json")
+popularity_filename = os.getenv("POPULARITY_DATA")
+if popularity_filename:
+    popularity_filename = os.path.join(popularity_filename, "popularity.json")
 
 # initialize globals
 # tracks number of uses of each transform
@@ -81,8 +83,8 @@ def update_ranking(ctx: CallbackContext):
         logging.info(f"popularity numbers written to {popularity_filename} at {time.asctime()}")
 
 @run_async
-def handle_error(upd: Update, ctx: CallbackContext):
-    raise
+def report_error(upd: Update, ctx: CallbackContext):
+    raise ctx.error
 
 def main():
     global popularity
@@ -111,7 +113,7 @@ def main():
     d.add_handler(ChosenInlineResultHandler(
         callback=count_hits,
     ))
-    d.add_error_handler(handle_error)
+    d.add_error_handler(report_error)
 
     j = u.job_queue
     if ranking_update_frequency:
